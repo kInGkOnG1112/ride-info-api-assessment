@@ -29,4 +29,5 @@ urlpatterns = [
     path('api/v1/json/', SpectacularAPIView.as_view(), name='schema'),
     path('api/v1/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('admin/', admin.site.urls),
+    path('', include('app_main.urls')),
 ]
