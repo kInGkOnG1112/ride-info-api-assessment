@@ -8,7 +8,7 @@ from rest_framework import routers
 from .views import ProfileView
 
 profile_router = routers.DefaultRouter()
-profile_router.register('profile', ProfileView)
+profile_router.register('user', ProfileView)
 
 urlpatterns = [
     path('', include(profile_router.urls)),

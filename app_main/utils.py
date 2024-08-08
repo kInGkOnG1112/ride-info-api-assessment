@@ -21,7 +21,7 @@ def get_user_login_data(user_id):
     :return:
     """
 
-    from app_main.serializers import UserProfileDefaultSerializer
+    from app_main.serializers.user_profile import UserProfileDefaultSerializer
 
     user_login_data = {}
     user = User.objects.get(pk=user_id)
@@ -45,22 +45,22 @@ class ResponseUtils:
     """
 
     @staticmethod
-    def error_response(message, status_code=status.HTTP_400_BAD_REQUEST):
-        return Response({
+    def _construct_response(message, data=None, error=None, status_code=status.HTTP_200_OK):
+        response = {
             'status_code': status_code,
             'message': message
-        }, status=status_code)
+        }
+        if data is not None:
+            response['data'] = data
+        if error is not None:
+            response['error'] = error
+
+        return Response(response, status=status_code)
 
     @staticmethod
-    def success_response(message, status_code=status.HTTP_200_OK):
-        return Response({
-            'status_code': status_code,
-            'message': message
-        }, status=status_code)
+    def success_response(message, data=None, status_code=status.HTTP_200_OK):
+        return ResponseUtils._construct_response(message, data=data, status_code=status_code)
 
     @staticmethod
-    def created_response(message, status_code=status.HTTP_201_CREATED):
-        return Response({
-            'status_code': status_code,
-            'message': message
-        }, status=status_code)
+    def error_response(message, error=None, status_code=status.HTTP_400_BAD_REQUEST):
+        return ResponseUtils._construct_response(message, error=error, status_code=status_code)

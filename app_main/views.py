@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -6,20 +5,25 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from app_main.models import UserProfile
-from app_main.serializers import (
+from app_main.serializers.user_profile import (
     UserProfileDefaultSerializer,
-    LoginSerializer
+    LoginSerializer,
+    SignUpSerializer
 )
 from app_main.utils import get_user_login_data, ResponseUtils
+from rideapi.permissions import TokenAndRolePermission, TokenAuthenticationPermission
 
 
-@extend_schema(tags=['Profile'])
+@extend_schema(tags=['User'])
 @extend_schema_view()
 class ProfileView(viewsets.GenericViewSet):
+    permission_classes = [TokenAndRolePermission]
+    required_role = ['R001']
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileDefaultSerializer
     action_serializers = {
-        'login': LoginSerializer
+        'login': LoginSerializer,
+        'signup': SignUpSerializer,
     }
 
     def get_serializer_class(self):
@@ -33,9 +37,6 @@ class ProfileView(viewsets.GenericViewSet):
         return super(ProfileView, self).get_serializer_class()
 
     def list(self, request, *args, **kwargs):
-        """
-        Health Condition List
-        """
         queryset = self.filter_queryset(self.get_queryset())
         paginated = request.GET.get('paginated', 'true')
 
@@ -64,4 +65,19 @@ class ProfileView(viewsets.GenericViewSet):
             response_data = get_user_login_data(instance['id'])
             return Response(response_data)
 
+        return ResponseUtils.error_response(serializer.errors)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny]
+    )
+    def signup(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            data = serializer.save()
+            response_message = data.get('message')
+            if data.get('success'):
+                return ResponseUtils.success_response(response_message)
+            return ResponseUtils.error_response(response_message, error=data.get('error'))
         return ResponseUtils.error_response(serializer.errors)
