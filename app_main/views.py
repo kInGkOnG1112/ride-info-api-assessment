@@ -1,14 +1,18 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from app_main.filters import UserProfileFilter
 from app_main.models import UserProfile
 from app_main.serializers.user_profile import (
     UserProfileDefaultSerializer,
     LoginSerializer,
-    SignUpSerializer
+    SignUpSerializer,
+    UserProfileUpdateSerializer
 )
 from app_main.utils import get_user_login_data, ResponseUtils
 from rideapi.permissions import TokenAndRolePermission, TokenAuthenticationPermission
@@ -19,11 +23,13 @@ from rideapi.permissions import TokenAndRolePermission, TokenAuthenticationPermi
 class ProfileView(viewsets.GenericViewSet):
     permission_classes = [TokenAndRolePermission]
     required_role = ['R001']
+    filter_backends = (UserProfileFilter,)
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileDefaultSerializer
     action_serializers = {
         'login': LoginSerializer,
         'signup': SignUpSerializer,
+        'profile_update': UserProfileUpdateSerializer,
     }
 
     def get_serializer_class(self):
@@ -56,9 +62,6 @@ class ProfileView(viewsets.GenericViewSet):
         permission_classes=[AllowAny]
     )
     def login(self, request, *args, **kwargs):
-        """
-        User Login
-        """
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             instance = serializer.save()
@@ -70,14 +73,64 @@ class ProfileView(viewsets.GenericViewSet):
     @action(
         detail=False,
         methods=['post'],
-        permission_classes=[AllowAny]
+        permission_classes=[AllowAny],
+        url_path='create'
     )
     def signup(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            data = serializer.save()
-            response_message = data.get('message')
-            if data.get('success'):
-                return ResponseUtils.success_response(response_message)
+        if not serializer.is_valid():
+            return ResponseUtils.error_response(serializer.errors)
+
+        data = serializer.save()
+        response_message = data.get('message')
+        if not data.get('success'):
             return ResponseUtils.error_response(response_message, error=data.get('error'))
-        return ResponseUtils.error_response(serializer.errors)
+
+        return ResponseUtils.success_response(response_message)
+
+
+    @action(
+        detail=False,
+        methods=['patch'],
+        permission_classes=[TokenAuthenticationPermission],
+        url_path='<int:id>/update'
+    )
+    def profile_update(self, request, id):
+        user_profile = UserProfile.objects.filter(id=id).first()
+        if not user_profile:
+            return ResponseUtils.error_response('User profile not found!')
+
+        serializer = self.get_serializer(user_profile, data=request.data)
+        if not serializer.is_valid():
+            return ResponseUtils.error_response(serializer.errors)
+
+        data = serializer.save()
+        response_message = data.get('message')
+        if not data.get('success'):
+            return ResponseUtils.error_response(response_message, error=data.get('error'))
+
+        profile = UserProfileDefaultSerializer(user_profile)
+        return ResponseUtils.success_response(response_message, data=profile.data)
+
+
+    @action(
+        detail=False,
+        methods=['delete'],
+        permission_classes=[TokenAndRolePermission],
+        url_path='<int:id>/remove'
+    )
+    def delete(self, request, id):
+        try:
+            user_profile = UserProfile.objects.filter(id=id).first()
+            if not user_profile:
+                return ResponseUtils.error_response('User profile not found!')
+
+            user_profile.is_deleted = True
+            user_profile.save()
+
+            response_message = 'Successfully deleted!'
+            return ResponseUtils.success_response(response_message)
+
+        except Exception as e:
+            response_message = 'Unable to process at this moment!'
+            return ResponseUtils.error_response(response_message, error=str(e))

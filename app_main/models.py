@@ -51,6 +51,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.ForeignKey('app_main.Role', on_delete=models.SET_NULL, **optional)
     phone_number = models.CharField(max_length=20, default='', **optional)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = 'User Profile'

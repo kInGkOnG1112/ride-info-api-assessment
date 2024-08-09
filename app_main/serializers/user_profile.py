@@ -15,7 +15,7 @@ from app_main.utils import save_validated_data
 class UserDefaultSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'first_name', 'last_name', 'email', 'is_superuser')
+        fields = ('id', 'first_name', 'last_name', 'email')
 
 
 class RoleDefaultSerializer(serializers.ModelSerializer):
@@ -49,6 +49,10 @@ class LoginSerializer(serializers.ModelSerializer):
         authenticated_user = authenticate(username=username, password=password)
         if not authenticated_user:
             errors['generic'] = 'Account not found.'
+
+        user_profile = UserProfile.objects.get(user=authenticated_user)
+        if user_profile.is_deleted:
+            errors['account'] = 'Account not found.'
 
         if errors:
             raise serializers.ValidationError(errors)
@@ -124,6 +128,68 @@ class SignUpSerializer(serializers.Serializer):
                     'success': True,
                     'message': 'Successfully registered.',
                 }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Unable to process at this moment!'
+            }
+
+
+class UserProfileUpdateSerializer(serializers.Serializer):
+    optional = {
+        'default': '',
+        'allow_blank': True,
+        'allow_null': True
+    }
+
+    first_name = serializers.CharField(max_length=50, **optional)
+    last_name = serializers.CharField(max_length=50, **optional)
+    email = serializers.CharField(max_length=50, **optional)
+    phone_number = serializers.CharField(max_length=20, **optional)
+
+    class Meta:
+        fields = '__all__'
+
+    def validate(self, data):
+        errors = dict()
+        user_profile = self.instance
+        email = data.get('email').strip()
+
+        if email:
+            try:
+                validate_email(email)
+            except ValidationError:
+                errors['email'] = 'Invalid email format.'
+
+            if User.objects.filter(email=email).exclude(id=user_profile.user.id).exists():
+                errors['email'] = 'Email address is no longer available.'
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
+
+    def save(self, **kwargs):
+        try:
+
+            data = save_validated_data(self.validated_data.items(), kwargs.items())
+
+            user_profile = self.instance
+            user_profile.phone_number = data.get('phone_number', user_profile.phone_number)
+            user_profile.save()
+
+            user = user_profile.user
+            user.first_name = data.get('first_name', user.first_name)
+            user.last_name = data.get('last_name', user.last_name)
+            user.email = data.get('emai', user.email)
+            user.username = data.get('emai', user.username)
+            user.save()
+
+            return {
+                'success': True,
+                'message': 'Successfully updated user profile.',
+            }
 
         except Exception as e:
             return {
